@@ -57,7 +57,11 @@ Respond ONLY with valid JSON, no markdown:
     const data = await response.json();
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
     const clean = text.replace(/```json|```/g, '').trim();
-    res.json(JSON.parse(clean));
+    try {
+      res.json(JSON.parse(clean));
+    } catch(parseErr) {
+      res.status(500).json({ error: 'Parse failed', raw: text, gemini: data });
+    }
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
