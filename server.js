@@ -11,17 +11,53 @@ app.use((req, res, next) => {
 
 app.post('/analyze', async (req, res) => {
   try {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': process.env.ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01'
-      },
-      body: JSON.stringify(req.body)
+    const { images, notes } = req.body;
+
+    const parts = [];
+    for (const img of images) {
+      parts.push({
+        inline_data: {
+          mime_type: img.type,
+          data: img.data
+        }
+      });
+    }
+
+    parts.push({
+      text: `You are a resale pricing expert. Analyze the item shown${notes ? ` with notes: "${notes}"` : ''}.
+Respond ONLY with valid JSON, no markdown:
+{
+  "item_name": "short name",
+  "brand": "brand or null",
+  "condition": "Like New|Good|Fair|Poor",
+  "condition_notes": "one sentence",
+  "prices": {
+    "offerup": { "low": 0, "mid": 0, "high": 0 },
+    "facebook": { "low": 0, "mid": 0, "high": 0 },
+    "ebay": { "low": 0, "mid": 0, "high": 0 },
+    "ebay_auction": { "low": 0, "mid": 0, "high": 0 }
+  },
+  "best_platform": "offerup|facebook|ebay",
+  "best_platform_reason": "one sentence",
+  "tips": ["tip1","tip2","tip3"],
+  "title_suggestion": "listing title",
+  "description_suggestion": "2-3 sentence description"
+}`
     });
+
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: [{ parts }] })
+      }
+    );
+
     const data = await response.json();
-    res.json(data);
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const clean = text.replace(/```json|```/g, '').trim();
+    res.json(JSON.parse(clean));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
