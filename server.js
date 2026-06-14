@@ -13,17 +13,19 @@ app.post('/analyze', async (req, res) => {
   try {
     const { images, notes } = req.body;
 
-    const parts = [];
+    const content = [];
     for (const img of images) {
-      parts.push({
-        inline_data: {
-          mime_type: img.type,
+      content.push({
+        type: 'image',
+        source: {
+          type: 'base64',
+          media_type: img.type,
           data: img.data
         }
       });
     }
-
-    parts.push({
+    content.push({
+      type: 'text',
       text: `You are a resale pricing expert. Analyze the item shown${notes ? ` with notes: "${notes}"` : ''}.
 Respond ONLY with valid JSON, no markdown:
 {
@@ -45,23 +47,25 @@ Respond ONLY with valid JSON, no markdown:
 }`
     });
 
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${process.env.GEMINI_API_KEY}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents: [{ parts }] })
-      }
-    );
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': process.env.ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 1000,
+        messages: [{ role: 'user', content }]
+      })
+    });
 
     const data = await response.json();
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    const clean = text.replace(/```json|```/g, '').trim();
-    try {
-      res.json(JSON.parse(clean));
-    } catch(parseErr) {
-      res.status(500).json({ error: 'Parse failed', raw: text, gemini: data });
-    }
+    if (data.error) throw new Error(data.error.message);
+    const raw = data.content.map(b => b.text || '').join('');
+    const clean = raw.replace(/```json|```/g, '').trim();
+    res.json(JSON.parse(clean));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
