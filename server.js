@@ -11,18 +11,31 @@ app.use((req, res, next) => {
 
 app.post('/analyze', async (req, res) => {
   try {
-    const { images, notes } = req.body;
+    const { images, notes, chat_mode, messages } = req.body;
+
+    if (chat_mode && messages) {
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': process.env.ANTHROPIC_API_KEY,
+          'anthropic-version': '2023-06-01'
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-6',
+          max_tokens: 500,
+          system: 'You are a helpful resale pricing expert. Answer follow up questions about selling items concisely in 1-3 sentences.',
+          messages
+        })
+      });
+      const data = await response.json();
+      const answer = data.content?.[0]?.text || 'Sorry I could not answer that.';
+      return res.json({ answer });
+    }
 
     const content = [];
     for (const img of images) {
-      content.push({
-        type: 'image',
-        source: {
-          type: 'base64',
-          media_type: img.type,
-          data: img.data
-        }
-      });
+      content.push({ type: 'image', source: { type: 'base64', media_type: img.type, data: img.data }});
     }
     content.push({
       type: 'text',
@@ -54,11 +67,7 @@ Respond ONLY with valid JSON, no markdown:
         'x-api-key': process.env.ANTHROPIC_API_KEY,
         'anthropic-version': '2023-06-01'
       },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 1000,
-        messages: [{ role: 'user', content }]
-      })
+      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 1000, messages: [{ role: 'user', content }] })
     });
 
     const data = await response.json();
