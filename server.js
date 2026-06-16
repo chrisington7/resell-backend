@@ -23,8 +23,8 @@ app.post('/analyze', async (req, res) => {
         },
         body: JSON.stringify({
           model: 'claude-sonnet-4-6',
-          max_tokens: 500,
-          system: 'You are a helpful resale pricing expert. Answer follow up questions about selling items concisely in 1-3 sentences.',
+          max_tokens: 1000,
+          system: 'You are a helpful resale pricing expert. Answer questions concisely in 1-3 sentences. When asked about trending items, provide a JSON array of 8 trending resale items with fields: name, category, avgPrice, reason.',
           messages
         })
       });
@@ -81,4 +81,4 @@ Respond ONLY with valid JSON, no markdown:
 });
 
 app.get('/', (req, res) => res.send('Resell backend is running.'));
-app.listen(process.env.PORT || 3000);
+app.listen(proce
