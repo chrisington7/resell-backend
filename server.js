@@ -24,13 +24,13 @@ app.post('/analyze', async (req, res) => {
         body: JSON.stringify({
           model: 'claude-sonnet-4-6',
           max_tokens: 1000,
-          system: 'You are a helpful resale pricing expert. Answer questions concisely in 1-3 sentences. When asked about trending items, provide a JSON array of 8 trending resale items with fields: name, category, avgPrice, reason.',
-          messages
+          system: 'You are a helpful resale pricing expert. Answer questions concisely in 1-3 sentences. When asked about trending items respond with only a JSON array of 8 items each having fields name, category, avgPrice, reason.',
+          messages: messages
         })
       });
       const data = await response.json();
-      const answer = data.content?.[0]?.text || 'Sorry I could not answer that.';
-      return res.json({ answer });
+      const answer = data.content[0].text;
+      return res.json({ answer: answer });
     }
 
     const content = [];
@@ -39,25 +39,7 @@ app.post('/analyze', async (req, res) => {
     }
     content.push({
       type: 'text',
-      text: `You are a resale pricing expert. Analyze the item shown${notes ? ` with notes: "${notes}"` : ''}.
-Respond ONLY with valid JSON, no markdown:
-{
-  "item_name": "short name",
-  "brand": "brand or null",
-  "condition": "Like New|Good|Fair|Poor",
-  "condition_notes": "one sentence",
-  "prices": {
-    "offerup": { "low": 0, "mid": 0, "high": 0 },
-    "facebook": { "low": 0, "mid": 0, "high": 0 },
-    "ebay": { "low": 0, "mid": 0, "high": 0 },
-    "ebay_auction": { "low": 0, "mid": 0, "high": 0 }
-  },
-  "best_platform": "offerup|facebook|ebay",
-  "best_platform_reason": "one sentence",
-  "tips": ["tip1","tip2","tip3"],
-  "title_suggestion": "listing title",
-  "description_suggestion": "2-3 sentence description"
-}`
+      text: 'You are a resale pricing expert. Analyze the item shown' + (notes ? ' with notes: ' + notes : '') + '. Respond ONLY with valid JSON, no markdown: {"item_name":"short name","brand":"brand or null","condition":"Like New|Good|Fair|Poor","condition_notes":"one sentence","prices":{"offerup":{"low":0,"mid":0,"high":0},"facebook":{"low":0,"mid":0,"high":0},"ebay":{"low":0,"mid":0,"high":0},"ebay_auction":{"low":0,"mid":0,"high":0}},"best_platform":"offerup|facebook|ebay","best_platform_reason":"one sentence","tips":["tip1","tip2","tip3"],"title_suggestion":"listing title","description_suggestion":"2-3 sentence description"}'
     });
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -67,7 +49,7 @@ Respond ONLY with valid JSON, no markdown:
         'x-api-key': process.env.ANTHROPIC_API_KEY,
         'anthropic-version': '2023-06-01'
       },
-      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 1000, messages: [{ role: 'user', content }] })
+      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 1000, messages: [{ role: 'user', content: content }] })
     });
 
     const data = await response.json();
@@ -81,4 +63,4 @@ Respond ONLY with valid JSON, no markdown:
 });
 
 app.get('/', (req, res) => res.send('Resell backend is running.'));
-app.listen(proce
+app.listen(process.env.PORT || 3000);
