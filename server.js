@@ -53,7 +53,8 @@ app.post('/analyze', async (req, res) => {
     });
 
     const data = await response.json();
-    if (data.error) throw new Error(data.error.message);
+    console.log('ANTHROPIC RESPONSE:', JSON.stringify(data));
+    if (data.error) throw new Error(JSON.stringify(data.error));
     const raw = data.content.map(b => b.text || '').join('');
     const clean = raw.replace(/```json|```/g, '').trim();
     res.json(JSON.parse(clean));
