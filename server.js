@@ -35,6 +35,7 @@ app.post('/analyze', async (req, res) => {
 
     const content = [];
     for (const img of images) {
+      console.log('IMAGE TYPE:', img.type, 'DATA LENGTH:', img.data ? img.data.length : 'NULL', 'FIRST 50 CHARS:', img.data ? img.data.substring(0, 50) : 'NONE');
       content.push({ type: 'image', source: { type: 'base64', media_type: img.type, data: img.data }});
     }
     content.push({
