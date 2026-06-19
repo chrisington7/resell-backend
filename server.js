@@ -1,12 +1,90 @@
 const express = require('express');
+const { Pool } = require('pg');
 const app = express();
 app.use(express.json({ limit: '20mb' }));
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false }
+});
+
+async function initDb() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS ad_views (
+      id SERIAL PRIMARY KEY,
+      user_id TEXT,
+      ad_type TEXT,
+      viewed_at TIMESTAMP DEFAULT NOW()
+    )
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS subscriptions (
+      id SERIAL PRIMARY KEY,
+      user_id TEXT UNIQUE,
+      is_active BOOLEAN DEFAULT false,
+      expires_at TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT NOW()
+    )
+  `);
+  console.log('Database tables ready');
+}
+initDb();
+
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Headers', 'Content-Type');
   if (req.method === 'OPTIONS') return res.sendStatus(200);
   next();
 });
+
+app.post('/track-ad', async (req, res) => {
+  try {
+    const { user_id, ad_type } = req.body;
+    await pool.query('INSERT INTO ad_views (user_id, ad_type) VALUES ($1, $2)', [user_id || 'anonymous', ad_type || 'banner']);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/ad-stats', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT ad_type, COUNT(*) as views FROM ad_views GROUP BY ad_type');
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/verify-subscription', async (req, res) => {
+  try {
+    const { user_id, receipt_data } = req.body;
+    // This is a placeholder - real Apple receipt verification will be added when subscriptions are built
+    await pool.query(
+      `INSERT INTO subscriptions (user_id, is_active, expires_at) VALUES ($1, true, NOW() + INTERVAL '30 days')
+       ON CONFLICT (user_id) DO UPDATE SET is_active = true, expires_at = NOW() + INTERVAL '30 days', updated_at = NOW()`,
+      [user_id]
+    );
+    res.json({ success: true, is_active: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/subscription-status/:user_id', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT is_active, expires_at FROM subscriptions WHERE user_id = $1', [req.params.user_id]);
+    if (result.rows.length === 0) {
+      return res.json({ is_active: false });
+    }
+    const sub = result.rows[0];
+    const isStillValid = sub.is_active && new Date(sub.expires_at) > new Date();
+    res.json({ is_active: isStillValid, expires_at: sub.expires_at });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.post('/analyze', async (req, res) => {
   try {
     const { images, notes, chat_mode, messages } = req.body;
@@ -55,5 +133,6 @@ app.post('/analyze', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
 app.get('/', (req, res) => res.send('Resell backend is running.'));
 app.listen(process.env.PORT || 3000);
