@@ -26,6 +26,12 @@ async function initDb() {
       updated_at TIMESTAMP DEFAULT NOW()
     )
   `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS scan_log (
+      id SERIAL PRIMARY KEY,
+      scanned_at TIMESTAMP DEFAULT NOW()
+    )
+  `);
   console.log('Database tables ready');
 }
 initDb();
@@ -51,6 +57,22 @@ app.get('/ad-stats', async (req, res) => {
   try {
     const result = await pool.query('SELECT ad_type, COUNT(*) as views FROM ad_views GROUP BY ad_type');
     res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/scan-stats', async (req, res) => {
+  try {
+    const { start, end } = req.query;
+    if (!start || !end) {
+      return res.status(400).json({ error: 'Pass ?start=YYYY-MM-DD&end=YYYY-MM-DD' });
+    }
+    const result = await pool.query(
+      `SELECT COUNT(*) AS scans FROM scan_log WHERE scanned_at::date BETWEEN $1 AND $2`,
+      [start, end]
+    );
+    res.json({ start, end, scans: parseInt(result.rows[0].scans, 10) });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -128,7 +150,9 @@ app.post('/analyze', async (req, res) => {
     if (data.error) throw new Error(JSON.stringify(data.error));
     const raw = data.content.map(b => b.text || '').join('');
     const clean = raw.replace(/```json|```/g, '').trim();
-    res.json(JSON.parse(clean));
+    const parsed = JSON.parse(clean);
+    pool.query('INSERT INTO scan_log DEFAULT VALUES').catch(err => console.error('scan log failed:', err));
+    res.json(parsed);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
